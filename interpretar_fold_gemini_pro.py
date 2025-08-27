@@ -669,9 +669,12 @@ def cmd_saliency(args: argparse.Namespace) -> None:
     sal_diff_np = sal_diff  # (C,R,R)
     l1 = np.abs(sal_diff_np).sum(axis=(1,2))  # L1 por canal
     frac = l1 / (l1.sum() + 1e-12)           # fracción relativa
-    # nombres de canales (si no se pasa, usar índices usados en entrenamiento)
+    # nombres de canales (si el usuario los pasa, usarlos; si no, usar índices)
     ch_used = list(args.channels_to_use)
-    ch_names = [f"Ch{c}" for c in ch_used]
+    if getattr(args, "channel_names", None) and len(args.channel_names) == len(ch_used):
+        ch_names = list(args.channel_names)
+    else:
+        ch_names = [f"Ch{c}" for c in ch_used]
     # guardar con nombres de columnas amigables para el notebook
     chan_df = pd.DataFrame({
         'channel_index': ch_used,
@@ -729,7 +732,6 @@ def cmd_saliency(args: argparse.Namespace) -> None:
             for _,r in sub.iterrows():
                 a=str(r['src_AAL3_Name']); b=str(r['dst_AAL3_Name']); w=abs(float(r['Saliency_Score']))
                 deg[a]+=1; deg[b]+=1; strg[a]+=w; strg[b]+=w
-            tab = pd.DataFrame({'node':nodes, 'degree':[deg[n] for n in nodes], 'strength':[strg[n] for n in nodes]})
             if tab['degree'].max()>0:
                 x = tab['degree'].to_numpy(dtype=float); y = tab['strength'].to_numpy(dtype=float)
                 s, b = np.polyfit(x, y, 1); tab['residual_strength'] = y - (b + s*x)
@@ -858,6 +860,9 @@ def _add_shared_args(p: argparse.ArgumentParser) -> None:
     p.add_argument('--intermediate_fc_dim_vae', default='quarter')
     p.add_argument('--vae_final_activation', default='tanh', choices=['tanh','sigmoid','linear'])
     p.add_argument('--gn_num_groups', type=int, default=16, help='n grupos para GroupNorm en VAE.')
+    p.add_argument('--channel_names', nargs='*', default=None,
+                   help='(Opcional) nombres legibles de los canales, longitud = len(channels_to_use).')
+
 
 
 def parse_args() -> argparse.Namespace:
