@@ -677,7 +677,7 @@ def cmd_saliency(args: argparse.Namespace) -> None:
         ch_names = [f"Ch{c}" for c in ch_used]
     # guardar con nombres de columnas amigables para el notebook
     chan_df = pd.DataFrame({
-        'channel_index': ch_used,
+        'channel_index_used': ch_used,
         'channel_name': ch_names,
         'l1_norm': l1,
         'l1_norm_fraction': frac
@@ -732,9 +732,17 @@ def cmd_saliency(args: argparse.Namespace) -> None:
             for _,r in sub.iterrows():
                 a=str(r['src_AAL3_Name']); b=str(r['dst_AAL3_Name']); w=abs(float(r['Saliency_Score']))
                 deg[a]+=1; deg[b]+=1; strg[a]+=w; strg[b]+=w
-            if tab['degree'].max()>0:
-                x = tab['degree'].to_numpy(dtype=float); y = tab['strength'].to_numpy(dtype=float)
-                s, b = np.polyfit(x, y, 1); tab['residual_strength'] = y - (b + s*x)
+            # Construir tabla y residualizar fuerza respecto a grado
+            tab = pd.DataFrame({
+                'node': nodes,
+                'degree': [deg[n] for n in nodes],
+                'strength': [strg[n] for n in nodes]
+            })
+            if tab['degree'].max() > 0:
+                x = tab['degree'].to_numpy(dtype=float)
+                y = tab['strength'].to_numpy(dtype=float)
+                slope, intercept = np.polyfit(x, y, 1)
+                tab['residual_strength'] = y - (intercept + slope * x)
             else:
                 tab['residual_strength'] = 0.0
             tab.sort_values('residual_strength', ascending=False).to_csv(out_dir / f'node_robust_hubs_top{K}{file_suffix}.csv', index=False)
