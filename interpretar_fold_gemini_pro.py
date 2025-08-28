@@ -466,10 +466,11 @@ def generate_saliency_integrated_gradients(vae_model: ConvolutionalVAE,
 
     # 3. Calcular atribuciones
     ig = IntegratedGradients(model_forward)
-    # --- FIX ---
-    # Move the baselines tensor to the same device as the model and input.
-    baselines = torch.zeros_like(input_tensor, device=device) 
+    # El tensor base (baseline) debe estar en el mismo dispositivo que la entrada.
+    # Creamos el baseline directamente en el dispositivo correcto.
+    baselines = torch.zeros_like(input_tensor).to(device)
     attributions = ig.attribute(input_tensor.to(device), baselines=baselines, n_steps=n_steps)
+
     
     sal = attributions.abs().mean(dim=0).cpu().numpy() # Promedio sobre batch
     return _project_to_H(sal)
@@ -501,14 +502,17 @@ def _ensure_background_processed(
         return pd.DataFrame(X_proc, columns=feat_names_target)
     # -----------------------------------------------------------------
     # resto del cuerpo idéntico, pero añade selector en el branch ndarray
-    if hasattr(background_data, "shape"):
+    if isinstance(background_data, np.ndarray):
         if background_data.shape[1] != len(feat_names_target):
-            log.warning("[SHAP] Background ndarray con #cols distinto; transformando…")
-            X_proc = preproc.transform(background_data)
-            if selector is not None:
-                X_proc = selector.transform(X_proc)
-            return pd.DataFrame(X_proc, columns=feat_names_target)
-        return background_data
+            # Este caso es ambiguo: ¿es un array crudo o uno ya procesado con otro
+            # preprocesador? El comportamiento más seguro es fallar o, como mínimo,
+            # registrar una advertencia severa, ya que no podemos asumir cómo procesarlo.
+            raise ValueError(
+                f"Background ndarray tiene {background_data.shape[1]} columnas, "
+                f"pero se esperaban {len(feat_names_target)}. No se puede continuar de forma segura."
+            )
+        # Si el número de columnas coincide, lo convertimos a DataFrame.
+        return pd.DataFrame(background_data, columns=feat_names_target)
     # -----------------------------------------------------------------
     raise TypeError(f"Tipo de background desconocido: {type(background_data)}")
 
